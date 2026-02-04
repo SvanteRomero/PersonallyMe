@@ -5,14 +5,45 @@ Serializers for Task model.
 from django.utils import timezone
 from rest_framework import serializers
 
-from .models import Task
+from .models import Tag, Task
+
+
+class TagSerializer(serializers.ModelSerializer):
+    """Serializer for Tag model."""
+
+    class Meta:
+        model = Tag
+        fields = ['id', 'name', 'color', 'is_predefined']
+        read_only_fields = ['id', 'is_predefined']
+
+    def validate_name(self, value):
+        """Validate tag name is not empty."""
+        value = value.strip()
+        if not value:
+            raise serializers.ValidationError('Tag name cannot be empty.')
+        return value
+
+    def validate_color(self, value):
+        """Validate color is a valid hex code."""
+        if not value.startswith('#') or len(value) != 7:
+            raise serializers.ValidationError('Color must be a valid hex code (e.g., #FF0000).')
+        return value
 
 
 class TaskSerializer(serializers.ModelSerializer):
     """Serializer for Task model."""
 
     is_overdue = serializers.ReadOnlyField()
+    is_recurring = serializers.ReadOnlyField()
     user_email = serializers.CharField(source='user.email', read_only=True)
+    tags = TagSerializer(many=True, read_only=True)
+    tag_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Tag.objects.all(),
+        write_only=True,
+        source='tags',
+        required=False
+    )
 
     class Meta:
         model = Task
@@ -23,12 +54,20 @@ class TaskSerializer(serializers.ModelSerializer):
             'status',
             'priority',
             'due_date',
+            'tags',
+            'tag_ids',
             'is_overdue',
             'is_deleted',
             'deleted_at',
             'created_at',
             'updated_at',
             'user_email',
+            'recurrence_pattern',
+            'times_per_period',
+            'current_period_count',
+            'period_start_date',
+            'is_recurring',
+            'keep_history',
         ]
         read_only_fields = [
             'id',
@@ -37,6 +76,9 @@ class TaskSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
             'user_email',
+            'current_period_count',
+            'period_start_date',
+            'is_recurring',
         ]
 
     def validate_title(self, value):
@@ -84,7 +126,12 @@ class TaskCreateSerializer(TaskSerializer):
             'status',
             'priority',
             'due_date',
+            'tags',
+            'tag_ids',
             'created_at',
+            'recurrence_pattern',
+            'times_per_period',
+            'keep_history',
         ]
         read_only_fields = ['id', 'created_at']
 
@@ -93,6 +140,8 @@ class TaskListSerializer(serializers.ModelSerializer):
     """Lightweight serializer for task lists."""
 
     is_overdue = serializers.ReadOnlyField()
+    is_recurring = serializers.ReadOnlyField()
+    tags = TagSerializer(many=True, read_only=True)
 
     class Meta:
         model = Task
@@ -103,7 +152,10 @@ class TaskListSerializer(serializers.ModelSerializer):
             'priority',
             'due_date',
             'is_overdue',
+            'is_recurring',
+            'tags',
             'created_at',
+            'recurrence_pattern',
         ]
 
 

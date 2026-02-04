@@ -40,9 +40,23 @@ export interface LoginResponse {
     user: User;
 }
 
+// Tag types
+export interface Tag {
+    id: number;
+    name: string;
+    color: string;
+    is_predefined: boolean;
+}
+
+export interface TagCreateData {
+    name: string;
+    color: string;
+}
+
 // Task types
 export type TaskStatus = 'todo' | 'in_progress' | 'completed';
 export type TaskPriority = 'low' | 'medium' | 'high';
+export type RecurrencePattern = 'none' | 'daily' | 'weekly' | 'monthly';
 
 export interface Task {
     id: number;
@@ -51,12 +65,21 @@ export interface Task {
     status: TaskStatus;
     priority: TaskPriority;
     due_date: string | null;
+    tags: Tag[];
     is_overdue: boolean;
     is_deleted: boolean;
     deleted_at: string | null;
     created_at: string;
     updated_at: string;
     user_email?: string;
+
+    // Recurrence fields
+    recurrence_pattern: RecurrencePattern;
+    times_per_period?: number | null;
+    current_period_count?: number;
+    period_start_date?: string;
+    is_recurring: boolean;
+    keep_history?: boolean;
 }
 
 export interface TaskCreateData {
@@ -65,6 +88,12 @@ export interface TaskCreateData {
     status?: TaskStatus;
     priority?: TaskPriority;
     due_date?: string;
+    tag_ids?: number[];
+
+    // Recurrence fields
+    recurrence_pattern?: RecurrencePattern;
+    times_per_period?: number;
+    keep_history?: boolean;
 }
 
 export interface TaskUpdateData extends Partial<TaskCreateData> { }
@@ -92,6 +121,7 @@ export interface TaskFilters {
     due_date_before?: string;
     is_overdue?: boolean;
     search?: string;
+    tag_ids?: number[];
 }
 
 // API Response types

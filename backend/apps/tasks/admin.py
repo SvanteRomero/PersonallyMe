@@ -5,7 +5,20 @@ Admin configuration for tasks app.
 from django.contrib import admin
 from django.utils.html import format_html
 
-from .models import Task
+from .models import Tag, Task
+
+
+@admin.register(Tag)
+class TagAdmin(admin.ModelAdmin):
+    """Admin for Tag model."""
+    list_display = ['name', 'user', 'color', 'is_predefined', 'create_date_display']
+    list_filter = ['is_predefined', 'user']
+    search_fields = ['name', 'user__email']
+    ordering = ['-is_predefined', 'name']
+    
+    def create_date_display(self, obj):
+        return obj.created_at.strftime('%Y-%m-%d')
+    create_date_display.short_description = 'Created'
 
 
 @admin.register(Task)
@@ -17,21 +30,36 @@ class TaskAdmin(admin.ModelAdmin):
         'user',
         'status_badge',
         'priority_badge',
+        'recurrence_badge',
         'due_date',
         'is_deleted',
         'created_at',
     ]
-    list_filter = ['status', 'priority', 'is_deleted', 'created_at']
-    search_fields = ['title', 'description', 'user__email']
+    list_filter = ['status', 'priority', 'is_deleted', 'recurrence_pattern', 'created_at']
+    search_fields = ['title', 'description', 'user__email', 'tags__name']
     ordering = ['-created_at']
-    readonly_fields = ['created_at', 'updated_at', 'deleted_at']
+    readonly_fields = ['created_at', 'updated_at', 'deleted_at', 'current_period_count', 'period_start_date']
+    filter_horizontal = ['tags']
     
     fieldsets = (
         (None, {
             'fields': ('user', 'title', 'description')
         }),
+        ('Organization', {
+            'fields': ('tags',),
+        }),
         ('Status', {
             'fields': ('status', 'priority', 'due_date')
+        }),
+        ('Recurrence', {
+            'fields': (
+                'recurrence_pattern', 
+                'times_per_period', 
+                'keep_history', 
+                'current_period_count', 
+                'period_start_date'
+            ),
+            'classes': ('collapse',),
         }),
         ('Soft Delete', {
             'fields': ('is_deleted', 'deleted_at'),
@@ -76,6 +104,13 @@ class TaskAdmin(admin.ModelAdmin):
         )
     priority_badge.short_description = 'Priority'
     priority_badge.admin_order_field = 'priority'
+    
+    def recurrence_badge(self, obj):
+        """Display recurrence info."""
+        if not obj.is_recurring:
+            return '-'
+        return f"{obj.get_recurrence_pattern_display()}" + (f" ({obj.times_per_period}x)" if obj.times_per_period else "")
+    recurrence_badge.short_description = 'Recurrence'
 
     actions = ['soft_delete_tasks', 'restore_tasks', 'mark_completed']
 

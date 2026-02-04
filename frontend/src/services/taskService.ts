@@ -26,6 +26,9 @@ export const taskService = {
             if (filters.due_date_before) params.append('due_date_before', filters.due_date_before);
             if (filters.is_overdue !== undefined) params.append('is_overdue', filters.is_overdue.toString());
             if (filters.search) params.append('search', filters.search);
+            if (filters.tag_ids && filters.tag_ids.length > 0) {
+                filters.tag_ids.forEach(id => params.append('tags', id.toString()));
+            }
         }
 
         const response = await api.get<PaginatedResponse<Task>>(`/tasks/?${params.toString()}`);

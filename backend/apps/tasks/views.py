@@ -4,6 +4,7 @@ Views for Task management.
 
 import logging
 
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -11,15 +12,55 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from .filters import TaskFilter
-from .models import Task
+from .models import Tag, Task
 from .serializers import (
     BulkTaskActionSerializer,
+    TagSerializer,
     TaskCreateSerializer,
     TaskListSerializer,
     TaskSerializer,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class TagViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for Tag management.
+    
+    list: GET /api/tags/ - List user's tags (predefined + custom)
+    create: POST /api/tags/ - Create custom tag
+    retrieve: GET /api/tags/{id}/ - Get specific tag
+    update: PUT /api/tags/{id}/ - Update tag
+    destroy: DELETE /api/tags/{id}/ - Delete tag
+    """
+    permission_classes = [IsAuthenticated]
+    serializer_class = TagSerializer
+
+    def get_queryset(self):
+        """Return tags for the authenticated user and predefined tags."""
+        user = self.request.user
+        return Tag.objects.filter(Q(user=user) | Q(is_predefined=True)).distinct()
+
+    def perform_create(self, serializer):
+        """Set user when creating usage tag."""
+        # Ensure predefined tags exist for user when they start using tags
+        # (This is a failsafe if they weren't created on signup)
+        if not Tag.objects.filter(user=self.request.user, is_predefined=True).exists():
+            Tag.create_predefined_for_user(self.request.user)
+            
+        serializer.save(user=self.request.user, is_predefined=False)
+        logger.info(f'Tag created by user {self.request.user.email}: {serializer.instance.name}')
+
+    def perform_destroy(self, instance):
+        """Prevent deleting predefined tags."""
+        if instance.is_predefined:
+            # Although permission classes handle auth, this is business logic
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Cannot delete predefined tags.")
+        
+        instance.delete()
+        logger.info(f'Tag deleted by user {self.request.user.email}: {instance.name}')
 
 
 class TaskViewSet(viewsets.ModelViewSet):
@@ -36,7 +77,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     
     permission_classes = [IsAuthenticated]
     filterset_class = TaskFilter
-    search_fields = ['title', 'description']
+    search_fields = ['title', 'description', 'tags__name']
     ordering_fields = ['created_at', 'updated_at', 'due_date', 'priority', 'status']
     ordering = ['-created_at']
 
@@ -66,7 +107,34 @@ class TaskViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         """Set the user when creating a task."""
         serializer.save(user=self.request.user)
+        
+        # Also ensure predefined tags exist
+        if not Tag.objects.filter(user=self.request.user, is_predefined=True).exists():
+            Tag.create_predefined_for_user(self.request.user)
+            
         logger.info(f'Task created by user {self.request.user.email}: {serializer.instance.title}')
+
+    def perform_update(self, serializer):
+        """Handle task updates, including completion of recurring tasks."""
+        # Check if status is changing to completed
+        instance = serializer.instance
+        new_status = serializer.validated_data.get('status')
+        
+        if new_status == Task.Status.COMPLETED and instance.status != Task.Status.COMPLETED:
+            if instance.is_recurring:
+                # This logic is complicated because the viewset update updates the instance directly.
+                # But our model logic creates specific side effects.
+                # We'll save normally first
+                updated_task = serializer.save()
+                
+                # Then trigger recurrence logic
+                next_task = updated_task.complete_recurring_task()
+                
+                if next_task and next_task != updated_task:
+                    logger.info(f'Recurring task created: {next_task.title} for user {self.request.user.email}')
+                return
+
+        serializer.save()
 
     def perform_destroy(self, instance):
         """Soft delete instead of hard delete."""
@@ -183,20 +251,36 @@ class TaskViewSet(viewsets.ModelViewSet):
                 task.restore()
                 updated_count += 1
         elif action_type == 'complete':
-            updated_count = tasks.filter(is_deleted=False).update(
-                status=Task.Status.COMPLETED,
-                updated_at=timezone.now()
-            )
+            # Handle recurrence logic for bulk complete
+            for task in tasks.filter(is_deleted=False):
+                if task.status != Task.Status.COMPLETED:
+                    task.status = Task.Status.COMPLETED
+                    task.updated_at = timezone.now()
+                    task.save()
+                    if task.is_recurring:
+                        task.complete_recurring_task()
+                    updated_count += 1
         elif action_type == 'set_priority':
             updated_count = tasks.filter(is_deleted=False).update(
                 priority=value,
                 updated_at=timezone.now()
             )
         elif action_type == 'set_status':
-            updated_count = tasks.filter(is_deleted=False).update(
-                status=value,
-                updated_at=timezone.now()
-            )
+            # For set_status, we need to loop if setting to completed to handle recurrence
+            if value == Task.Status.COMPLETED:
+                for task in tasks.filter(is_deleted=False):
+                    if task.status != Task.Status.COMPLETED:
+                        task.status = Task.Status.COMPLETED
+                        task.updated_at = timezone.now()
+                        task.save()
+                        if task.is_recurring:
+                            task.complete_recurring_task()
+                        updated_count += 1
+            else:
+                updated_count = tasks.filter(is_deleted=False).update(
+                    status=value,
+                    updated_at=timezone.now()
+                )
         
         logger.info(
             f'Bulk action "{action_type}" performed by user {request.user.email} '

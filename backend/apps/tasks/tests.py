@@ -11,7 +11,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import Task
+from .models import Tag, Task
 
 User = get_user_model()
 
@@ -59,6 +59,9 @@ def create_task(db):
             priority=kwargs.get('priority', Task.Priority.MEDIUM),
             due_date=kwargs.get('due_date'),
             is_deleted=kwargs.get('is_deleted', False),
+            recurrence_pattern=kwargs.get('recurrence_pattern', Task.RecurrencePattern.NONE),
+            times_per_period=kwargs.get('times_per_period'),
+            keep_history=kwargs.get('keep_history', True),
         )
     return _create_task
 
@@ -309,3 +312,164 @@ class TestTaskStats:
         assert response.data['by_priority']['high'] == 1
         assert response.data['by_priority']['low'] == 1
         assert response.data['deleted'] == 1
+
+
+@pytest.mark.django_db
+class TestTags:
+    """Tests for Tag functionality."""
+
+    def test_predefined_tags_created_on_fetch(self, authenticated_client):
+        """Test that fetching tags creates predefined ones if missing."""
+        url = reverse('tasks:tag-list')
+        response = authenticated_client.get(url)
+        
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data) >= 4  # Should create 4 predefined tags
+        
+        # Verify specific tags exist
+        tags = Tag.objects.filter(user=authenticated_client.user, is_predefined=True)
+        assert tags.count() == 4
+        assert tags.filter(name='Work').exists()
+        assert tags.filter(name='Personal').exists()
+
+    def test_create_custom_tag(self, authenticated_client):
+        """Test user can create custom custom tags."""
+        url = reverse('tasks:tag-list')
+        data = {'name': 'Custom Tag', 'color': '#000000'}
+        response = authenticated_client.post(url, data)
+        
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['name'] == 'Custom Tag'
+        assert not response.data['is_predefined']
+
+    def test_cannot_delete_predefined_tag(self, authenticated_client):
+        """Test preventing deletion of predefined tags."""
+        # Ensure tags exist
+        Tag.create_predefined_for_user(authenticated_client.user)
+        tag = Tag.objects.filter(user=authenticated_client.user, is_predefined=True).first()
+        
+        url = reverse('tasks:tag-detail', kwargs={'pk': tag.id})
+        response = authenticated_client.delete(url)
+        
+        assert response.status_code == status.HTTP_403_FORBIDDEN
+
+    def test_delete_custom_tag(self, authenticated_client):
+        """Test deleting custom tags works."""
+        tag = Tag.objects.create(user=authenticated_client.user, name='Custom', color='#123456')
+        url = reverse('tasks:tag-detail', kwargs={'pk': tag.id})
+        response = authenticated_client.delete(url)
+        
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+    def test_assign_tags_to_task(self, authenticated_client, create_task):
+        """Test that tasks can have tags."""
+        # Create tag first
+        tag = Tag.objects.create(user=authenticated_client.user, name='Tag1')
+        
+        url = reverse('tasks:task-list')
+        data = {
+            'title': 'Tagged Task',
+            'tag_ids': [tag.id]
+        }
+        response = authenticated_client.post(url, data, format='json')
+        
+        assert response.status_code == status.HTTP_201_CREATED
+        assert len(response.data['tags']) == 1
+        assert response.data['tags'][0]['id'] == tag.id
+
+
+@pytest.mark.django_db
+class TestRecurringTasks:
+    """Tests for Recurring Tasks functionality."""
+
+    def test_create_recurring_task(self, authenticated_client):
+        """Test creating a task with recurrence pattern."""
+        url = reverse('tasks:task-list')
+        data = {
+            'title': 'Daily Standup',
+            'recurrence_pattern': 'daily',
+            'due_date': timezone.now().isoformat()
+        }
+        response = authenticated_client.post(url, data, format='json')
+        
+        assert response.status_code == status.HTTP_201_CREATED
+        assert response.data['recurrence_pattern'] == 'daily'
+        assert response.data['is_recurring'] is True
+
+    def test_complete_recurring_creates_next_keep_history(self, authenticated_client):
+        """Test completing recurring task with keep_history=True creates new task."""
+        due_date = timezone.now()
+        task = Task.objects.create(
+            user=authenticated_client.user,
+            title='Weekly Report',
+            recurrence_pattern='weekly',
+            due_date=due_date,
+            keep_history=True
+        )
+        
+        url = reverse('tasks:task-detail', kwargs={'pk': task.id})
+        response = authenticated_client.patch(url, {'status': 'completed'}, format='json')
+        
+        assert response.status_code == status.HTTP_200_OK
+        
+        # Original task completed
+        task.refresh_from_db()
+        assert task.status == Task.Status.COMPLETED
+        
+        # Verify new task created
+        next_tasks = Task.objects.filter(title='Weekly Report', status='todo')
+        assert next_tasks.count() == 1
+        next_task = next_tasks.first()
+        
+        # New due date is roughly +7 days (ignoring exact second precision)
+        expected_date = due_date + timedelta(weeks=1)
+        assert next_task.due_date.date() == expected_date.date()
+
+    def test_complete_recurring_updates_existing_no_history(self, authenticated_client):
+        """Test completing recurring task with keep_history=False updates existing task."""
+        due_date = timezone.now()
+        task = Task.objects.create(
+            user=authenticated_client.user,
+            title='Daily Clean',
+            recurrence_pattern='daily',
+            due_date=due_date,
+            keep_history=False
+        )
+        
+        url = reverse('tasks:task-detail', kwargs={'pk': task.id})
+        response = authenticated_client.patch(url, {'status': 'completed'}, format='json')
+        
+        assert response.status_code == status.HTTP_200_OK
+        
+        # Same task updated to todo
+        task.refresh_from_db()
+        assert task.status == Task.Status.TODO
+        
+        # Due date updated
+        expected_date = due_date + timedelta(days=1)
+        assert task.due_date.date() == expected_date.date()
+
+    def test_times_per_period_limit(self, authenticated_client):
+        """Test that task doesn't re-occur if times_per_period reached."""
+        task = Task.objects.create(
+            user=authenticated_client.user,
+            title='Thrice Weekly',
+            recurrence_pattern='weekly',
+            times_per_period=2,
+            due_date=timezone.now(),
+            keep_history=False
+        )
+        
+        url = reverse('tasks:task-detail', kwargs={'pk': task.id})
+        
+        # Complete once - should reset
+        authenticated_client.patch(url, {'status': 'completed'}, format='json')
+        task.refresh_from_db()
+        assert task.status == Task.Status.TODO
+        assert task.current_period_count == 1
+        
+        # Complete second time - should stay completed (limit reached)
+        authenticated_client.patch(url, {'status': 'completed'}, format='json')
+        task.refresh_from_db()
+        assert task.status == Task.Status.COMPLETED
+        assert task.current_period_count == 2

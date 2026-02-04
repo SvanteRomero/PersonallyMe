@@ -11,9 +11,10 @@ import { THEMES } from '../utils/constants';
 import { ThemeName } from '../types';
 import Button from '../components/common/Button';
 import Input from '../components/common/Input';
+import TagManager from '../components/tags/TagManager';
 
 export default function SettingsPage() {
-    const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'password'>('profile');
+    const [activeTab, setActiveTab] = useState<'profile' | 'appearance' | 'password' | 'tags'>('profile');
     const [isProfileLoading, setIsProfileLoading] = useState(false);
     const [isPasswordLoading, setIsPasswordLoading] = useState(false);
 
@@ -72,6 +73,7 @@ export default function SettingsPage() {
     const tabs = [
         { id: 'profile', label: 'Profile', icon: '👤' },
         { id: 'appearance', label: 'Appearance', icon: '🎨' },
+        { id: 'tags', label: 'Tags', icon: '🏷️' },
         { id: 'password', label: 'Password', icon: '🔒' },
     ] as const;
 
@@ -83,13 +85,13 @@ export default function SettingsPage() {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-2 border-b border-themed pb-2">
+            <div className="flex gap-2 border-b border-themed pb-2 overflow-x-auto">
                 {tabs.map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
                         className={`
-              px-4 py-2 rounded-lg font-medium transition-all
+              px-4 py-2 rounded-lg font-medium transition-all whitespace-nowrap
               ${activeTab === tab.id
                                 ? 'bg-primary text-white'
                                 : 'text-body hover:bg-surface-hover'
@@ -204,6 +206,11 @@ export default function SettingsPage() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Tags Tab */}
+            {activeTab === 'tags' && (
+                <TagManager />
             )}
 
             {/* Password Tab */}

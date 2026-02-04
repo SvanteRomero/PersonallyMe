@@ -103,6 +103,21 @@ export const taskSchema = yup.object({
         .string()
         .optional()
         .default(''),
+
+    // Recurrence fields
+    recurrence_pattern: yup
+        .string()
+        .oneOf(['none', 'daily', 'weekly', 'monthly'] as const, 'Invalid recurrence pattern')
+        .default('none'),
+    times_per_period: yup
+        .number()
+        .nullable()
+        .transform((value, originalValue) => (originalValue === '' ? null : value))
+        .optional()
+        .min(1, 'Must be at least 1'),
+    keep_history: yup
+        .boolean()
+        .default(true),
 });
 
 // Profile update schema

@@ -4,7 +4,7 @@ Filters for Task model.
 
 from django_filters import rest_framework as filters
 
-from .models import Task
+from .models import Tag, Task
 
 
 class TaskFilter(filters.FilterSet):
@@ -12,6 +12,13 @@ class TaskFilter(filters.FilterSet):
 
     # Status filter
     status = filters.ChoiceFilter(choices=Task.Status.choices)
+    
+    # Tag filter
+    tags = filters.ModelMultipleChoiceFilter(
+        queryset=Tag.objects.all(),
+        field_name='tags',
+        to_field_name='id',
+    )
 
     # Priority filter
     priority = filters.ChoiceFilter(choices=Task.Priority.choices)
@@ -60,6 +67,7 @@ class TaskFilter(filters.FilterSet):
             'created_before',
             'is_overdue',
             'has_due_date',
+            'tags',
         ]
 
     def filter_is_overdue(self, queryset, name, value):

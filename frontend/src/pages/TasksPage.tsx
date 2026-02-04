@@ -1,17 +1,20 @@
 import { useEffect, useState, useCallback } from 'react';
 import { taskService } from '../services/taskService';
+import { tagService } from '../services/tagService';
 import { useNotification } from '../contexts/NotificationContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { Task, TaskFilters, TaskStatus, TaskPriority } from '../types';
+import { Task, TaskFilters, TaskStatus, TaskPriority, Tag, TaskUpdateData, TaskCreateData } from '../types';
 import { THEMES, TASK_STATUS_OPTIONS, TASK_PRIORITY_OPTIONS } from '../utils/constants';
 import { parseApiError, getStatusClasses, getPriorityClasses, formatDate, getRelativeTime } from '../utils/formatters';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import Button from '../components/common/Button';
 import TaskModal from '../components/tasks/TaskModal';
 import DeleteConfirmModal from '../components/tasks/DeleteConfirmModal';
+import TagBadge from '../components/tags/TagBadge';
 
 export default function TasksPage() {
     const [tasks, setTasks] = useState<Task[]>([]);
+    const [tags, setTags] = useState<Tag[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [page, setPage] = useState(1);
     const [totalCount, setTotalCount] = useState(0);
@@ -26,7 +29,20 @@ export default function TasksPage() {
 
     const { success, error: showError } = useNotification();
     const { theme } = useTheme();
-    const currentTheme = THEMES[theme];
+    const currentTheme = THEMES[theme] || THEMES['amber'];
+
+    // Load available tags for filter
+    useEffect(() => {
+        const loadTags = async () => {
+            try {
+                const data = await tagService.getTags();
+                setTags(data);
+            } catch (error) {
+                console.error('Failed to load tags for filters', error);
+            }
+        };
+        loadTags();
+    }, []);
 
     const fetchTasks = useCallback(async () => {
         setIsLoading(true);
@@ -35,10 +51,22 @@ export default function TasksPage() {
                 ...filters,
                 search: searchTerm || undefined,
             });
-            setTasks(response.results);
-            setTotalCount(response.count);
+
+            // Handle potential API response inconsistencies (pagination vs list)
+            if (response && Array.isArray(response)) {
+                setTasks(response);
+                setTotalCount(response.length);
+            } else if (response && response.results) {
+                setTasks(response.results);
+                setTotalCount(response.count);
+            } else {
+                setTasks([]);
+                setTotalCount(0);
+            }
         } catch (err) {
             showError(parseApiError(err));
+            // Ensure tasks is not undefined on error
+            setTasks(prev => prev || []);
         } finally {
             setIsLoading(false);
         }
@@ -48,7 +76,7 @@ export default function TasksPage() {
         fetchTasks();
     }, [fetchTasks]);
 
-    const handleCreateTask = async (data: Partial<Task>) => {
+    const handleCreateTask = async (data: TaskCreateData | Partial<Task>) => {
         try {
             await taskService.createTask(data as any);
             success('Task created successfully!');
@@ -59,10 +87,17 @@ export default function TasksPage() {
         }
     };
 
-    const handleUpdateTask = async (data: Partial<Task>) => {
+    const handleUpdateTask = async (data: TaskCreateData | Partial<Task>) => {
         if (!editingTask) return;
         try {
-            await taskService.updateTask(editingTask.id, data);
+            // Cast the data directly to TaskUpdateData to resolve type mismatch
+            const updateData: TaskUpdateData = {
+                ...data,
+                description: data.description || undefined,
+                due_date: data.due_date || undefined
+            } as TaskUpdateData;
+
+            await taskService.updateTask(editingTask.id, updateData);
             success('Task updated successfully!');
             setEditingTask(null);
             fetchTasks();
@@ -93,6 +128,15 @@ export default function TasksPage() {
         }
     };
 
+    const handleTagFilterChange = (tagId: string) => {
+        if (!tagId) {
+            const { tag_ids, ...restFilters } = filters;
+            setFilters(restFilters);
+        } else {
+            setFilters({ ...filters, tag_ids: [parseInt(tagId)] });
+        }
+    };
+
     const totalPages = Math.ceil(totalCount / 10);
 
     return (
@@ -117,9 +161,9 @@ export default function TasksPage() {
 
             {/* Filters & Search */}
             <div className="bg-surface rounded-xl p-4 border border-themed space-y-4">
-                <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex flex-col flex-wrap lg:flex-row gap-4">
                     {/* Search */}
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-[200px]">
                         <input
                             type="text"
                             placeholder="Search tasks..."
@@ -153,8 +197,20 @@ export default function TasksPage() {
                         ))}
                     </select>
 
+                    {/* Tag Filter */}
+                    <select
+                        value={filters.tag_ids?.[0] || ''}
+                        onChange={(e) => handleTagFilterChange(e.target.value)}
+                        className="px-4 py-2 rounded-lg bg-background border border-themed text-body focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                        <option value="">All Tags</option>
+                        {tags.map(tag => (
+                            <option key={tag.id} value={tag.id}>{tag.name}</option>
+                        ))}
+                    </select>
+
                     {/* View Toggle */}
-                    <div className="flex rounded-lg overflow-hidden border border-themed">
+                    <div className="flex rounded-lg overflow-hidden border border-themed shrink-0">
                         <button
                             onClick={() => setViewMode('card')}
                             className={`px-3 py-2 ${viewMode === 'card' ? 'bg-primary text-white' : 'bg-surface text-body'}`}
@@ -190,7 +246,11 @@ export default function TasksPage() {
                         </svg>
                     </div>
                     <h3 className="text-lg font-semibold text-body mb-2">No tasks found</h3>
-                    <p className="text-muted mb-4">Get started by creating your first task!</p>
+                    <p className="text-muted mb-4">
+                        {Object.keys(filters).length > 0 || searchTerm
+                            ? "Try adjusting your filters or search terms."
+                            : "Get started by creating your first task!"}
+                    </p>
                     <Button onClick={() => setIsCreateModalOpen(true)}>Create Task</Button>
                 </div>
             ) : viewMode === 'card' ? (
@@ -198,59 +258,83 @@ export default function TasksPage() {
                     {tasks.map(task => (
                         <div
                             key={task.id}
-                            className="bg-surface rounded-xl p-4 border border-themed hover:shadow-lg transition-all cursor-pointer group"
+                            className="bg-surface rounded-xl p-4 border border-themed hover:shadow-lg transition-all cursor-pointer group flex flex-col h-full"
                             onClick={() => setEditingTask(task)}
                         >
                             <div className="flex items-start justify-between mb-3">
                                 <h3 className="font-semibold text-body group-hover:text-primary-color transition-colors line-clamp-2">
                                     {task.title}
                                 </h3>
-                                <button
-                                    onClick={(e) => { e.stopPropagation(); setDeletingTask(task); }}
-                                    className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-muted hover:text-red-500 transition-colors"
-                                >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                </button>
-                            </div>
-
-                            {task.description && (
-                                <p className="text-sm text-muted mb-3 line-clamp-2">{task.description}</p>
-                            )}
-
-                            <div className="flex flex-wrap gap-2 mb-3">
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusClasses(task.status)}`}>
-                                    {TASK_STATUS_OPTIONS.find(s => s.value === task.status)?.label}
-                                </span>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityClasses(task.priority)}`}>
-                                    {TASK_PRIORITY_OPTIONS.find(p => p.value === task.priority)?.label}
-                                </span>
-                            </div>
-
-                            {task.due_date && (
-                                <p className={`text-xs ${task.is_overdue ? 'text-red-500 font-medium' : 'text-muted'}`}>
-                                    {task.is_overdue ? '⚠️ Overdue: ' : 'Due: '}
-                                    {getRelativeTime(task.due_date)}
-                                </p>
-                            )}
-
-                            {/* Quick status change */}
-                            <div className="mt-3 pt-3 border-t border-themed flex gap-2">
-                                {TASK_STATUS_OPTIONS.map(option => (
+                                <div className="flex items-center gap-1">
+                                    {/* Recurrence Indicator */}
+                                    {task.is_recurring && (
+                                        <div className="p-1 text-muted">
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <title>{task.times_per_period ? `${task.times_per_period}x ${task.recurrence_pattern}` : task.recurrence_pattern}</title>
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                            </svg>
+                                        </div>
+                                    )}
                                     <button
-                                        key={option.value}
-                                        onClick={(e) => { e.stopPropagation(); handleStatusChange(task, option.value); }}
-                                        className={`flex-1 py-1 text-xs rounded transition-colors ${task.status === option.value
+                                        onClick={(e) => { e.stopPropagation(); setDeletingTask(task); }}
+                                        className="p-1 rounded hover:bg-red-100 dark:hover:bg-red-900/30 text-muted hover:text-red-500 transition-colors"
+                                    >
+                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex-1">
+                                {task.description && (
+                                    <p className="text-sm text-muted mb-3 line-clamp-2">{task.description}</p>
+                                )}
+
+                                {/* Tags */}
+                                {task.tags && task.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mb-3">
+                                        {task.tags.map(tag => (
+                                            <TagBadge key={tag.id} tag={tag} size="sm" />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="mt-auto">
+                                <div className="flex flex-wrap gap-2 mb-3">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusClasses(task.status)}`}>
+                                        {TASK_STATUS_OPTIONS.find(s => s.value === task.status)?.label}
+                                    </span>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityClasses(task.priority)}`}>
+                                        {TASK_PRIORITY_OPTIONS.find(p => p.value === task.priority)?.label}
+                                    </span>
+                                </div>
+
+                                {task.due_date && (
+                                    <p className={`text-xs ${task.is_overdue ? 'text-red-500 font-medium' : 'text-muted'}`}>
+                                        {task.is_overdue ? '⚠️ Overdue: ' : 'Due: '}
+                                        {getRelativeTime(task.due_date)}
+                                    </p>
+                                )}
+
+                                {/* Quick status change */}
+                                <div className="mt-3 pt-3 border-t border-themed flex gap-2">
+                                    {TASK_STATUS_OPTIONS.map(option => (
+                                        <button
+                                            key={option.value}
+                                            onClick={(e) => { e.stopPropagation(); handleStatusChange(task, option.value); }}
+                                            className={`flex-1 py-1 text-xs rounded transition-colors ${task.status === option.value
                                                 ? 'bg-primary text-white'
                                                 : 'bg-gray-100 dark:bg-gray-700 text-muted hover:bg-gray-200 dark:hover:bg-gray-600'
-                                            }`}
-                                        style={{ backgroundColor: task.status === option.value ? currentTheme.primaryColor : undefined }}
-                                        disabled={task.status === option.value}
-                                    >
-                                        {option.label}
-                                    </button>
-                                ))}
+                                                }`}
+                                            style={{ backgroundColor: task.status === option.value ? currentTheme.primaryColor : undefined }}
+                                            disabled={task.status === option.value}
+                                        >
+                                            {option.label}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     ))}
@@ -261,6 +345,7 @@ export default function TasksPage() {
                         <thead className="bg-gray-50 dark:bg-gray-800">
                             <tr>
                                 <th className="px-4 py-3 text-left text-sm font-semibold text-body">Title</th>
+                                <th className="px-4 py-3 text-left text-sm font-semibold text-body hidden sm:table-cell">Tags</th>
                                 <th className="px-4 py-3 text-left text-sm font-semibold text-body hidden md:table-cell">Status</th>
                                 <th className="px-4 py-3 text-left text-sm font-semibold text-body hidden md:table-cell">Priority</th>
                                 <th className="px-4 py-3 text-left text-sm font-semibold text-body hidden lg:table-cell">Due Date</th>
@@ -273,10 +358,23 @@ export default function TasksPage() {
                                     <td className="px-4 py-3">
                                         <button
                                             onClick={() => setEditingTask(task)}
-                                            className="font-medium text-body hover:text-primary-color text-left"
+                                            className="font-medium text-body hover:text-primary-color text-left flex items-center gap-2"
                                         >
                                             {task.title}
+                                            {task.is_recurring && (
+                                                <svg className="w-4 h-4 text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <title>{task.times_per_period ? `${task.times_per_period}x ${task.recurrence_pattern}` : task.recurrence_pattern}</title>
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                                </svg>
+                                            )}
                                         </button>
+                                    </td>
+                                    <td className="px-4 py-3 hidden sm:table-cell">
+                                        <div className="flex flex-wrap gap-1">
+                                            {task.tags?.map(tag => (
+                                                <TagBadge key={tag.id} tag={tag} size="sm" />
+                                            ))}
+                                        </div>
                                     </td>
                                     <td className="px-4 py-3 hidden md:table-cell">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusClasses(task.status)}`}>

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ThemeName, ThemeMode } from '../types';
-import { THEME_KEY, THEME_MODE_KEY, DEFAULT_THEME, DEFAULT_THEME_MODE } from '../utils/constants';
+import { THEME_KEY, THEME_MODE_KEY, DEFAULT_THEME, DEFAULT_THEME_MODE, THEMES } from '../utils/constants';
 
 interface ThemeContextType {
     theme: ThemeName;
@@ -14,8 +14,12 @@ const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const [theme, setThemeState] = useState<ThemeName>(() => {
-        const stored = localStorage.getItem(THEME_KEY);
-        return (stored as ThemeName) || DEFAULT_THEME;
+        const stored = localStorage.getItem(THEME_KEY) as ThemeName;
+        // Validate that the stored theme actually exists in our THEMES definition
+        if (stored && THEMES[stored]) {
+            return stored;
+        }
+        return DEFAULT_THEME;
     });
 
     const [mode, setModeState] = useState<ThemeMode>(() => {
@@ -74,8 +78,14 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const setTheme = useCallback((newTheme: ThemeName) => {
-        localStorage.setItem(THEME_KEY, newTheme);
-        setThemeState(newTheme);
+        if (THEMES[newTheme]) {
+            localStorage.setItem(THEME_KEY, newTheme);
+            setThemeState(newTheme);
+        } else {
+            console.warn(`Attempted to set invalid theme: ${newTheme}`);
+            localStorage.setItem(THEME_KEY, DEFAULT_THEME);
+            setThemeState(DEFAULT_THEME);
+        }
     }, []);
 
     const setMode = useCallback((newMode: ThemeMode) => {
