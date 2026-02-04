@@ -1,0 +1,222 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@300;400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Custom Properties for Theme System */
+:root {
+  /* Amber Theme (Default) */
+  --color-primary: 245 158 11;
+  --color-primary-light: 251 191 36;
+  --color-primary-dark: 180 83 9;
+  --color-secondary: 253 230 138;
+  --color-accent: 217 119 6;
+  
+  --color-background: 255 251 235;
+  --color-surface: 255 255 255;
+  --color-surface-hover: 254 243 199;
+  
+  --color-text-primary: 41 37 36;
+  --color-text-secondary: 87 83 78;
+  --color-text-muted: 120 113 108;
+  
+  --color-border: 214 211 209;
+  --color-border-light: 231 229 228;
+  
+  --color-success: 34 197 94;
+  --color-warning: 245 158 11;
+  --color-error: 239 68 68;
+  --color-info: 59 130 246;
+  
+  font-family: 'Nunito', system-ui, sans-serif;
+}
+
+/* Dark Mode */
+.dark {
+  --color-primary: 217 119 6;
+  --color-primary-light: 245 158 11;
+  --color-primary-dark: 146 64 14;
+  --color-secondary: 120 53 15;
+  --color-accent: 251 191 36;
+  
+  --color-background: 28 25 23;
+  --color-surface: 41 37 36;
+  --color-surface-hover: 68 64 60;
+  
+  --color-text-primary: 250 250 249;
+  --color-text-secondary: 214 211 209;
+  --color-text-muted: 168 162 158;
+  
+  --color-border: 68 64 60;
+  --color-border-light: 87 83 78;
+}
+
+/* Terracotta Theme */
+.theme-terracotta {
+  --color-primary: 224 122 95;
+  --color-primary-light: 248 113 113;
+  --color-primary-dark: 185 28 28;
+  --color-secondary: 254 202 202;
+  --color-accent: 220 38 38;
+  
+  --color-background: 254 242 242;
+  --color-surface: 255 255 255;
+  --color-surface-hover: 254 226 226;
+}
+
+.theme-terracotta.dark {
+  --color-primary: 220 38 38;
+  --color-primary-light: 248 113 113;
+  --color-primary-dark: 153 27 27;
+  --color-secondary: 127 29 29;
+  --color-accent: 248 113 113;
+  
+  --color-background: 28 25 23;
+  --color-surface: 41 37 36;
+  --color-surface-hover: 68 64 60;
+}
+
+/* Gold Theme */
+.theme-gold {
+  --color-primary: 184 134 11;
+  --color-primary-light: 250 204 21;
+  --color-primary-dark: 113 63 18;
+  --color-secondary: 254 240 138;
+  --color-accent: 161 98 7;
+  
+  --color-background: 254 252 232;
+  --color-surface: 255 255 255;
+  --color-surface-hover: 254 249 195;
+}
+
+.theme-gold.dark {
+  --color-primary: 161 98 7;
+  --color-primary-light: 184 134 11;
+  --color-primary-dark: 66 32 6;
+  --color-secondary: 113 63 18;
+  --color-accent: 250 204 21;
+  
+  --color-background: 28 25 23;
+  --color-surface: 41 37 36;
+  --color-surface-hover: 68 64 60;
+}
+
+/* Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Nunito', system-ui, sans-serif;
+  background-color: rgb(var(--color-background));
+  color: rgb(var(--color-text-primary));
+  line-height: 1.6;
+  min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Focus styles for accessibility */
+*:focus-visible {
+  outline: 2px solid rgb(var(--color-primary));
+  outline-offset: 2px;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(var(--color-surface));
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--color-border));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--color-text-muted));
+}
+
+/* Utility Classes */
+@layer utilities {
+  .bg-primary {
+    background-color: rgb(var(--color-primary));
+  }
+  
+  .bg-surface {
+    background-color: rgb(var(--color-surface));
+  }
+  
+  .bg-background {
+    background-color: rgb(var(--color-background));
+  }
+  
+  .text-primary-color {
+    color: rgb(var(--color-primary));
+  }
+  
+  .text-body {
+    color: rgb(var(--color-text-primary));
+  }
+  
+  .text-secondary {
+    color: rgb(var(--color-text-secondary));
+  }
+  
+  .text-muted {
+    color: rgb(var(--color-text-muted));
+  }
+  
+  .border-themed {
+    border-color: rgb(var(--color-border));
+  }
+  
+  .shadow-themed {
+    box-shadow: 0 4px 6px -1px rgb(var(--color-primary) / 0.1),
+                0 2px 4px -2px rgb(var(--color-primary) / 0.1);
+  }
+  
+  .gradient-primary {
+    background: linear-gradient(
+      135deg,
+      rgb(var(--color-primary)) 0%,
+      rgb(var(--color-primary-light)) 100%
+    );
+  }
+}
+
+/* Animation utilities */
+.animate-enter {
+  animation: fadeIn 0.3s ease-out, slideUp 0.3s ease-out;
+}
+
+/* Loading skeleton */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgb(var(--color-surface-hover)) 0%,
+    rgb(var(--color-surface)) 50%,
+    rgb(var(--color-surface-hover)) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.5s infinite;
+}
+
+@keyframes skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
