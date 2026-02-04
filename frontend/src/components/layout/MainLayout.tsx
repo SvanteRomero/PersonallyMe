@@ -130,7 +130,9 @@ export default function MainLayout() {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="font-medium text-body truncate">
-                                    {user?.get_full_name || user?.first_name || 'User'}
+                                    {user?.first_name && user?.last_name 
+                                        ? `${user.first_name} ${user.last_name}`
+                                        : user?.first_name || 'User'}
                                 </p>
                                 <p className="text-xs text-muted truncate">{user?.email}</p>
                             </div>
