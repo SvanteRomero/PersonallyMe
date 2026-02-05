@@ -10,7 +10,7 @@ from .views import TaskViewSet
 app_name = 'tasks'
 
 router = DefaultRouter()
-router.register('tasks', TaskViewSet, basename='task')
+router.register('', TaskViewSet, basename='task')
 
 urlpatterns = [
     path('', include(router.urls)),

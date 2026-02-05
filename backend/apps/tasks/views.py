@@ -4,6 +4,8 @@ Views for Task management.
 
 import logging
 
+import logging
+
 from django.db.models import Q
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -20,6 +22,8 @@ from .serializers import (
     TaskListSerializer,
     TaskSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TaskViewSet(viewsets.ModelViewSet):
