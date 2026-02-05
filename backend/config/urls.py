@@ -8,7 +8,8 @@ from django.urls import include, path
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/', include('apps.users.urls')),
-    path('api/', include('apps.tasks.urls')),
+    path('api/tags/', include('apps.tags.urls')),
+    path('api/tasks/', include('apps.tasks.urls')),
 ]
 
 # Add debug toolbar URLs in development

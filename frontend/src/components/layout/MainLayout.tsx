@@ -88,7 +88,7 @@ export default function MainLayout() {
                                 </svg>
                             </div>
                             <div>
-                                <h1 className="font-bold text-body">Task Manager</h1>
+                                <h1 className="font-bold text-body">PersonallyMe</h1>
                                 <p className="text-xs text-muted">{currentTheme.displayName}</p>
                             </div>
                         </div>

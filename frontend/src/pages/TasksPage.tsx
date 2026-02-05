@@ -20,7 +20,15 @@ export default function TasksPage() {
     const [totalCount, setTotalCount] = useState(0);
     const [filters, setFilters] = useState<TaskFilters>({});
     const [searchTerm, setSearchTerm] = useState('');
-    const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
+    const [viewMode, setViewMode] = useState<'card' | 'table'>(() => {
+        const saved = localStorage.getItem('taskViewMode');
+        return (saved === 'card' || saved === 'table') ? saved : 'card';
+    });
+
+    // Save view mode preference
+    useEffect(() => {
+        localStorage.setItem('taskViewMode', viewMode);
+    }, [viewMode]);
 
     // Modal states
     const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);

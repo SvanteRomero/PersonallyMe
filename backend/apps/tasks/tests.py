@@ -11,7 +11,8 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import Tag, Task
+from apps.tags.models import Tag
+from .models import Task
 
 User = get_user_model()
 
@@ -314,52 +315,7 @@ class TestTaskStats:
         assert response.data['deleted'] == 1
 
 
-@pytest.mark.django_db
-class TestTags:
-    """Tests for Tag functionality."""
 
-    def test_predefined_tags_created_on_fetch(self, authenticated_client):
-        """Test that fetching tags creates predefined ones if missing."""
-        url = reverse('tasks:tag-list')
-        response = authenticated_client.get(url)
-        
-        assert response.status_code == status.HTTP_200_OK
-        assert len(response.data) >= 4  # Should create 4 predefined tags
-        
-        # Verify specific tags exist
-        tags = Tag.objects.filter(user=authenticated_client.user, is_predefined=True)
-        assert tags.count() == 4
-        assert tags.filter(name='Work').exists()
-        assert tags.filter(name='Personal').exists()
-
-    def test_create_custom_tag(self, authenticated_client):
-        """Test user can create custom custom tags."""
-        url = reverse('tasks:tag-list')
-        data = {'name': 'Custom Tag', 'color': '#000000'}
-        response = authenticated_client.post(url, data)
-        
-        assert response.status_code == status.HTTP_201_CREATED
-        assert response.data['name'] == 'Custom Tag'
-        assert not response.data['is_predefined']
-
-    def test_cannot_delete_predefined_tag(self, authenticated_client):
-        """Test preventing deletion of predefined tags."""
-        # Ensure tags exist
-        Tag.create_predefined_for_user(authenticated_client.user)
-        tag = Tag.objects.filter(user=authenticated_client.user, is_predefined=True).first()
-        
-        url = reverse('tasks:tag-detail', kwargs={'pk': tag.id})
-        response = authenticated_client.delete(url)
-        
-        assert response.status_code == status.HTTP_403_FORBIDDEN
-
-    def test_delete_custom_tag(self, authenticated_client):
-        """Test deleting custom tags works."""
-        tag = Tag.objects.create(user=authenticated_client.user, name='Custom', color='#123456')
-        url = reverse('tasks:tag-detail', kwargs={'pk': tag.id})
-        response = authenticated_client.delete(url)
-        
-        assert response.status_code == status.HTTP_204_NO_CONTENT
 
     def test_assign_tags_to_task(self, authenticated_client, create_task):
         """Test that tasks can have tags."""
