@@ -98,14 +98,7 @@ export default function TasksPage() {
     const handleUpdateTask = async (data: TaskCreateData | Partial<Task>) => {
         if (!editingTask) return;
         try {
-            // Cast the data directly to TaskUpdateData to resolve type mismatch
-            const updateData: TaskUpdateData = {
-                ...data,
-                description: data.description || undefined,
-                due_date: data.due_date || undefined
-            } as TaskUpdateData;
-
-            await taskService.updateTask(editingTask.id, updateData);
+            await taskService.updateTask(editingTask.id, data as TaskUpdateData);
             success('Task updated successfully!');
             setEditingTask(null);
             fetchTasks();

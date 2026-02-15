@@ -96,7 +96,10 @@ export interface TaskCreateData {
     keep_history?: boolean;
 }
 
-export interface TaskUpdateData extends Partial<TaskCreateData> { }
+export interface TaskUpdateData extends Omit<Partial<TaskCreateData>, 'description' | 'due_date'> {
+    description?: string | null;
+    due_date?: string | null;
+}
 
 export interface TaskStats {
     total: number;

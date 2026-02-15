@@ -43,6 +43,7 @@ yarn-error.log*
 # Build outputs
 frontend/build/
 frontend/dist/
+*.tsbuildinfo
 .next/
 
 # Environment variables
