@@ -1,0 +1,33 @@
+# Dependencies - installed fresh inside the container
+frontend/node_modules/
+backend/venv/
+backend/__pycache__/
+
+# Build artifacts
+frontend/dist/
+frontend/build/
+*.tsbuildinfo
+
+# Environment files
+.env
+.env.*
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker (avoid recursive inclusion)
+docker-compose.override.yml
+
+# Misc
+*.log
+*.tmp
+*.bak
