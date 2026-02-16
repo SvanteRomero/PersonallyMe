@@ -131,9 +131,9 @@ The production setup uses **Option B** — the React app calls the backend domai
    DJANGO_SECRET_KEY=your-secure-random-secret-key
 
    # Your domains
-   FRONTEND_DOMAIN=task-manager.ns.namespaxe.io
-   BACKEND_DOMAIN=api.task-manager.ns.namespaxe.io
-   VITE_API_URL=https://api.task-manager.ns.namespaxe.io/api
+   FRONTEND_DOMAIN=your-frontend-domain.com
+   BACKEND_DOMAIN=api.your-backend-domain.com
+   VITE_API_URL=https://api.your-backend-domain.com/api
 
    # Database
    POSTGRES_PASSWORD=your-secure-db-password
