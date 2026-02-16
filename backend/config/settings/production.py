@@ -30,8 +30,17 @@ DATABASES = {
 }
 
 # CORS settings for production
-CORS_ALLOWED_ORIGINS = os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')
+CORS_ALLOWED_ORIGINS = [
+    origin.strip() for origin in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',')
+    if origin.strip()
+]
 CORS_ALLOW_CREDENTIALS = True
+
+# CSRF trusted origins (required for cross-origin POST requests)
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip() for origin in os.environ.get('CSRF_TRUSTED_ORIGINS', '').split(',')
+    if origin.strip()
+]
 
 # Security settings
 SECURE_BROWSER_XSS_FILTER = True

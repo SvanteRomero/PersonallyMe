@@ -1,4 +1,3 @@
-# DEVELOPMENT ONLY - For production use: docker compose -f docker-compose.prod.yml up --build -d
 version: '3.8'
 
 services:
@@ -21,24 +20,27 @@ services:
       retries: 5
     restart: unless-stopped
 
-  # Django Backend
+  # Django Backend (Gunicorn) - directly accessible via BACKEND_DOMAIN
   backend:
     build:
       context: .
       dockerfile: docker/Dockerfile.backend
     container_name: taskmanager_backend
     volumes:
-      - ./backend:/app # Mount for development hot-reload
       - static_volume:/app/staticfiles
     environment:
-      - DJANGO_SETTINGS_MODULE=config.settings.development
-      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:-dev-secret-key-change-me}
-      - DJANGO_DEBUG=${DJANGO_DEBUG:-True}
+      - DJANGO_SETTINGS_MODULE=config.settings.production
+      - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY:?Set DJANGO_SECRET_KEY in .env}
+      - DJANGO_DEBUG=False
+      - DJANGO_ALLOWED_HOSTS=${BACKEND_DOMAIN:-localhost},localhost,127.0.0.1
       - POSTGRES_DB=${POSTGRES_DB:-taskmanager}
       - POSTGRES_USER=${POSTGRES_USER:-taskmanager_user}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-taskmanager_password}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
+      - CORS_ALLOWED_ORIGINS=https://${FRONTEND_DOMAIN:-localhost:3000},http://${FRONTEND_DOMAIN:-localhost:3000}
+      - CSRF_TRUSTED_ORIGINS=https://${FRONTEND_DOMAIN:-localhost:3000},http://${FRONTEND_DOMAIN:-localhost:3000}
+      - SECURE_SSL_REDIRECT=${SECURE_SSL_REDIRECT:-False}
     ports:
       - "8000:8000"
     depends_on:
@@ -46,36 +48,25 @@ services:
         condition: service_healthy
     command: >
       sh -c "python manage.py migrate &&
-             python manage.py runserver 0.0.0.0:8000"
+             python manage.py collectstatic --noinput &&
+             gunicorn --bind 0.0.0.0:8000 --workers 3 --timeout 120 config.wsgi:application"
     restart: unless-stopped
 
-  # React Frontend (Production)
+  # Nginx (React SPA only - no API proxy)
   frontend:
     build:
       context: .
       dockerfile: docker/Dockerfile.frontend
+      args:
+        - VITE_API_URL=${VITE_API_URL:-/api}
     container_name: taskmanager_frontend
+    volumes:
+      - static_volume:/app/staticfiles:ro
     ports:
       - "3000:80"
     depends_on:
       - backend
     restart: unless-stopped
-
-  # Development frontend with hot-reload (uses pnpm)
-  frontend-dev:
-    image: node:20-alpine
-    container_name: taskmanager_frontend_dev
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules # Exclude node_modules
-    environment:
-      - VITE_API_URL=http://localhost:8000/api
-    ports:
-      - "5173:5173"
-    command: sh -c "npm install -g pnpm && pnpm install && pnpm dev --host 0.0.0.0"
-    profiles:
-      - dev
 
 volumes:
   postgres_data:

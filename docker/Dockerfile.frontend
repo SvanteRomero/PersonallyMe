@@ -2,6 +2,10 @@
 # Stage 1: Build
 FROM node:20-alpine AS builder
 
+# Accept API URL as build argument (baked into JS bundle)
+ARG VITE_API_URL=/api
+ENV VITE_API_URL=${VITE_API_URL}
+
 # Enable corepack for pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
@@ -16,7 +20,7 @@ RUN pnpm install --frozen-lockfile || pnpm install
 # Copy source code
 COPY frontend/ .
 
-# Build the application
+# Build the application (VITE_API_URL is baked in here)
 RUN pnpm build
 
 # Stage 2: Production
@@ -27,6 +31,9 @@ COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Copy nginx configuration
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Create directory for Django static files (shared volume mount point)
+RUN mkdir -p /app/staticfiles
 
 # Expose port
 EXPOSE 80

@@ -1,24 +1,27 @@
 # Personal Task Manager
 
-A full-stack task management application built with Django REST Framework (backend) and React + TypeScript (frontend). Features JWT authentication, task CRUD with soft delete, filtering, and a beautiful warm-themed UI.
+A full-stack task management application built with Django REST Framework and React + TypeScript. Features JWT authentication, task CRUD with soft delete, tags, recurring tasks, and a warm-themed UI with multiple palettes.
 
 ## Features
 
 ### Backend
 - **JWT Authentication** with token refresh and blacklisting
 - **Custom User Model** with email as identifier
-- **Task Management** with CRUD operations
-- **Soft Delete & Restore** functionality
-- **Filtering & Search** by status, priority, date range
+- **Task Management** with CRUD operations and soft delete/restore
+- **Tags** — predefined and custom, color-coded
+- **Recurring Tasks** — daily, weekly, monthly with configurable frequency
+- **Filtering & Search** by status, priority, date range, tags
 - **Pagination** and statistics endpoints
 - **Bulk Actions** for task management
 
 ### Frontend
-- **React 18** with TypeScript
+- **React 18** with TypeScript (strict type-checking)
 - **3 Theme Palettes**: Amber, Terracotta, Gold (light/dark modes)
 - **Responsive Design** with Tailwind CSS
 - **PWA Ready** with offline support
 - **Form Validation** with React Hook Form + Yup
+- **Tag Management** — create, assign, filter by tags
+- **Card & Table View** — switchable task list layouts
 
 ## Tech Stack
 
@@ -29,6 +32,8 @@ A full-stack task management application built with Django REST Framework (backe
 | Styling | Tailwind CSS, Nunito font |
 | Database | PostgreSQL 15 |
 | Auth | JWT (SimpleJWT) |
+| WSGI Server | Gunicorn |
+| Reverse Proxy | Nginx |
 | Containerization | Docker, Docker Compose |
 
 ## Quick Start
@@ -37,24 +42,6 @@ A full-stack task management application built with Django REST Framework (backe
 - Docker & Docker Compose
 - Node.js 20+ with pnpm (for local dev)
 - Python 3.11+ (for local dev)
-
-### Using Docker (Recommended)
-
-```bash
-# Clone and navigate
-cd PersonallyMe
-
-# Copy environment variables
-cp .env.example .env
-
-# Start all services
-docker-compose up -d
-
-# Access:
-# - Frontend: http://localhost:3000
-# - Backend API: http://localhost:8000/api
-# - Admin: http://localhost:8000/admin
-```
 
 ### Local Development
 
@@ -89,9 +76,95 @@ cd frontend
 # Install dependencies
 pnpm install
 
-# Start dev server
+# Start dev server (with live type-checking)
 pnpm dev
+
+# Type-check only (no build)
+pnpm typecheck
+
+# Production build (type-check + bundle)
+pnpm build
 ```
+
+> **Note:** `pnpm build` runs `tsc -b --force && vite build` to ensure type errors are always caught before bundling. The `--force` flag prevents stale `.tsbuildinfo` cache from masking errors.
+
+### Docker Development
+```bash
+# Copy environment variables
+cp .env.example .env
+
+# Start all services
+docker compose up -d
+
+# Access:
+# - Frontend: http://localhost:3000
+# - Backend API: http://localhost:8000/api
+# - Admin: http://localhost:8000/admin
+```
+
+---
+
+## Production Deployment
+
+### Architecture
+
+```
+Browser → Frontend Domain (Nginx)
+              └── Serves React SPA + Django static files
+
+Browser → Backend Domain (Gunicorn)
+              └── Django API (CORS allows frontend domain)
+```
+
+The production setup uses **Option B** — the React app calls the backend domain directly. CORS is configured to allow cross-origin requests from the frontend domain.
+
+### Setup
+
+1. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   ```
+
+2. **Set your domains and secrets in `.env`:**
+   ```env
+   # Required
+   DJANGO_SECRET_KEY=your-secure-random-secret-key
+
+   # Your domains
+   FRONTEND_DOMAIN=task-manager.ns.namespaxe.io
+   BACKEND_DOMAIN=api.task-manager.ns.namespaxe.io
+   VITE_API_URL=https://api.task-manager.ns.namespaxe.io/api
+
+   # Database
+   POSTGRES_PASSWORD=your-secure-db-password
+
+   # Enable HTTPS redirect
+   SECURE_SSL_REDIRECT=True
+   ```
+
+3. **Build and run:**
+   ```bash
+   docker compose -f docker-compose.prod.yml up --build -d
+   ```
+
+### What's auto-configured
+
+These are derived from `FRONTEND_DOMAIN` and `BACKEND_DOMAIN` in `docker-compose.prod.yml` — no need to set them manually:
+
+| Setting | Derived from |
+|---------|-------------|
+| `DJANGO_ALLOWED_HOSTS` | `BACKEND_DOMAIN` |
+| `CORS_ALLOWED_ORIGINS` | `FRONTEND_DOMAIN` (http + https) |
+| `CSRF_TRUSTED_ORIGINS` | `FRONTEND_DOMAIN` (http + https) |
+
+### Docker Compose Files
+
+| File | Purpose |
+|------|---------|
+| `docker-compose.yml` | **Development** — uses `runserver`, hot-reload, dev settings |
+| `docker-compose.prod.yml` | **Production** — uses Gunicorn, Nginx, production settings |
+
+---
 
 ## API Endpoints
 
@@ -119,12 +192,21 @@ pnpm dev
 | GET | `/api/tasks/stats/` | Get task statistics |
 | POST | `/api/tasks/bulk_action/` | Perform bulk actions |
 
+### Tags
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/tags/` | List all tags |
+| POST | `/api/tags/` | Create custom tag |
+| PATCH | `/api/tags/{id}/` | Update tag |
+| DELETE | `/api/tags/{id}/` | Delete custom tag |
+
 ### Query Parameters (Tasks)
 - `status`: todo, in_progress, completed
 - `priority`: low, medium, high
 - `due_date_after`, `due_date_before`: Date range
 - `is_overdue`: true/false
 - `search`: Search in title/description
+- `tag_ids`: Filter by tag IDs
 - `ordering`: created_at, due_date, priority, status
 
 ## Project Structure
@@ -134,12 +216,13 @@ PersonallyMe/
 ├── backend/
 │   ├── apps/
 │   │   ├── users/       # Auth & user management
-│   │   └── tasks/       # Task CRUD & filters
+│   │   ├── tasks/       # Task CRUD, filters, recurrence
+│   │   └── tags/        # Tag management
 │   ├── config/
-│   │   ├── settings/    # Django settings
+│   │   ├── settings/    # base, development, production
 │   │   ├── urls.py
 │   │   └── wsgi.py
-│   └── requirements/
+│   └── requirements/    # base, development, production
 ├── frontend/
 │   ├── src/
 │   │   ├── components/  # React components
@@ -148,28 +231,15 @@ PersonallyMe/
 │   │   ├── services/    # API services
 │   │   ├── types/       # TypeScript definitions
 │   │   └── utils/       # Helpers & validation
-│   └── public/          # PWA assets
+│   └── public/          # PWA assets & icons
 ├── docker/
-└── docker-compose.yml
-```
-
-## Environment Variables
-
-See `.env.example` for all available options. Key variables:
-
-```env
-# Database
-POSTGRES_DB=taskmanager
-POSTGRES_USER=taskmanager_user
-POSTGRES_PASSWORD=your-secure-password
-
-# Django
-DJANGO_SECRET_KEY=your-secret-key
-DJANGO_DEBUG=True
-
-# JWT
-JWT_ACCESS_TOKEN_LIFETIME_MINUTES=60
-JWT_REFRESH_TOKEN_LIFETIME_DAYS=7
+│   ├── Dockerfile.backend
+│   ├── Dockerfile.frontend
+│   └── nginx.conf
+├── docker-compose.yml       # Development
+├── docker-compose.prod.yml  # Production
+├── .env.example
+└── .dockerignore
 ```
 
 ## Testing
@@ -183,7 +253,9 @@ pytest
 ### Frontend
 ```bash
 cd frontend
-pnpm test
+pnpm test           # Run tests
+pnpm typecheck      # Type-check only
+pnpm test:coverage  # With coverage
 ```
 
 ## License
